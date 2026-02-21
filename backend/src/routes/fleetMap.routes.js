@@ -13,9 +13,9 @@ router.use(authorize('MANAGER'));
  */
 router.get('/data', async (_req, res, next) => {
     try {
-        // Active trips (DISPATCHED) with vehicle + driver info
+        // Active trips (ON_TRIP) with vehicle + driver info
         const activeTrips = await prisma.trip.findMany({
-            where: { status: 'DISPATCHED' },
+            where: { status: 'ON_TRIP' },
             include: {
                 vehicle: { select: { code: true, name: true, type: true, region: true } },
                 driver: { select: { name: true } },

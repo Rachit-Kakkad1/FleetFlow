@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useFleet } from '../context/FleetContext';
+import { expenseService } from '../api/services';
 import { calcUtilizationRate, calcCostPerKm, formatCurrency, formatDate } from '../utils/calculations';
 import { getRoleConfig } from '../config/roleConfig';
 import StatCard from '../components/ui/StatCard';
@@ -23,10 +24,36 @@ export default function Dashboard() {
   const { vehicles, drivers, trips, maintenance, expenses, user } = useFleet();
   const [typeFilter, setTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [anomalies, setAnomalies] = useState([]);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
 
   const config = getRoleConfig(user?.role);
   const kpis = config.dashboardKPIs;
   const widgets = config.dashboardWidgets;
+
+  useEffect(() => {
+    if (widgets.includes('suspiciousFuelActivity')) {
+      fetchAnomalies();
+    }
+  }, [widgets]);
+
+  const fetchAnomalies = async () => {
+    setAnomalyLoading(true);
+    try {
+      const data = await expenseService.getAnomalies();
+      setAnomalies(data || []);
+    } catch (e) { console.error(e); }
+    setAnomalyLoading(false);
+  };
+
+  const handleResolveAnomaly = async (id) => {
+    try {
+      await expenseService.resolveAnomaly(id);
+      fetchAnomalies();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // KPI calculations
   const activeFleet = vehicles.filter(v => v.status === 'On Trip').length;
@@ -369,6 +396,45 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Suspicious Fuel Activity (Manager) */}
+        {widgets.includes('suspiciousFuelActivity') && anomalies.length > 0 && (
+          <div className="card" style={{ gridColumn: '1 / -1', borderLeft: '4px solid var(--status-error)' }}>
+            <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={18} color="var(--status-error)" />
+              Suspicious Fuel Activity
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Vehicle</th><th>Trip</th><th>Logged</th><th>Expected</th><th>Difference</th><th>Status</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {anomalies.map(a => (
+                    <tr key={a.id}>
+                      <td data-label="Date">{formatDate(a.date)}</td>
+                      <td data-label="Vehicle">{a.vehicle?.name}</td>
+                      <td data-label="Trip">{a.trip?.code || 'None'}</td>
+                      <td data-label="Logged" style={{ color: 'var(--status-error)', fontWeight: 600 }}>{a.loggedFuel.toFixed(1)}L</td>
+                      <td data-label="Expected">{a.expectedFuel.toFixed(1)}L</td>
+                      <td data-label="Difference">+{a.difference.toFixed(1)}L</td>
+                      <td data-label="Status">
+                        <StatusChip status={a.status === 'CLEARED' ? 'AVAILABLE' : 'RETIRED'} customLabel={a.status} />
+                      </td>
+                      <td data-label="Actions">
+                        {a.status === 'PENDING_REVIEW' && (
+                          <button className="btn btn-sm btn-ghost" onClick={() => handleResolveAnomaly(a.id)}>Mark Cleared</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ROI & Cost/Km cards */}
@@ -424,6 +490,59 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* SUSPICIOUS FUEL ACTIVITY PANEL */}
+      {widgets.includes('suspiciousFuelActivity') && anomalies.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--status-error)' }}>
+            <AlertTriangle size={20} /> Suspicious Fuel Activity
+          </h3>
+          <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Vehicle</th>
+                  <th>Trip ID</th>
+                  <th>Expected (L)</th>
+                  <th>Logged (L)</th>
+                  <th>Difference</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {anomalies.map(a => (
+                  <tr key={a.id}>
+                    <td data-label="Vehicle">
+                      <div style={{ textAlign: 'right' }}>
+                        <strong>{a.vehicle?.name}</strong> <br />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{a.vehicle?.licensePlate}</span>
+                      </div>
+                    </td>
+                    <td data-label="Trip ID" className="mono" style={{ fontSize: '0.85rem' }}>{a.trip?.code || a.tripId?.split('-')[0]}</td>
+                    <td data-label="Expected" className="mono">{a.expectedFuel.toFixed(1)}</td>
+                    <td data-label="Logged" className="mono" style={{ color: 'var(--status-error)', fontWeight: 600 }}>{a.loggedFuel.toFixed(1)}</td>
+                    <td data-label="Difference" className="mono">+{a.difference.toFixed(1)} L</td>
+                    <td data-label="Date">{formatDate(a.date)}</td>
+                    <td data-label="Status">
+                      <StatusChip status={a.status === 'PENDING_REVIEW' ? 'Pending' : 'Cleared'} />
+                    </td>
+                    <td data-label="Actions">
+                      {a.status === 'PENDING_REVIEW' ? (
+                        <button className="btn btn-sm btn-success" onClick={() => handleResolveAnomaly(a.id)}>Mark Cleared</button>
+                      ) : (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--status-success)' }}>Resolved</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
     </motion.div>
   );
 }

@@ -16,10 +16,14 @@ import Expenses from './pages/Expenses';
 import Drivers from './pages/Drivers';
 import Analytics from './pages/Analytics';
 import UserManagement from './pages/UserManagement';
+import SafetyOfficerApproval from './pages/SafetyOfficerApproval';
+import DriverDashboard from './pages/DriverDashboard';
+import { useRealTime } from './hooks/useRealTime';
 import './App.css';
 
 function ProtectedLayout() {
   const { user } = useFleet();
+  useRealTime(); // Initialize live alerts logic
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if (!user) return <Navigate to="/login" replace />;
@@ -94,7 +98,9 @@ export default function App() {
             <Route path="/expenses" element={<RoleRoute path="/expenses"><Expenses /></RoleRoute>} />
             <Route path="/drivers" element={<RoleRoute path="/drivers"><Drivers /></RoleRoute>} />
             <Route path="/analytics" element={<RoleRoute path="/analytics"><Analytics /></RoleRoute>} />
-            <Route path="/user-management" element={<RoleRoute path="/user-management"><UserManagement /></RoleRoute>} />
+            <Route path="/manager/users" element={<RoleRoute path="/manager/users"><UserManagement /></RoleRoute>} />
+            <Route path="/safety/pending-trips" element={<RoleRoute path="/safety/pending-trips"><SafetyOfficerApproval /></RoleRoute>} />
+            <Route path="/driver/dashboard" element={<RoleRoute path="/driver/dashboard"><DriverDashboard /></RoleRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -102,3 +108,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+ 

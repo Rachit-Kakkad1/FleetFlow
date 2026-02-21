@@ -1,5 +1,7 @@
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
+const { initSocket } = require('./socket');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -58,8 +60,12 @@ app.use(errorHandler);
 
 // ─── Start server ───
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = http.createServer(app);
+initSocket(server);
+
+server.listen(PORT, () => {
     console.log(`🚛 FleetFlow API running on http://localhost:${PORT}`);
+    console.log(`🔌 Socket.io server running`);
 });
 
 module.exports = app;

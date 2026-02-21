@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const io = require('../socket');
 
 /**
  * List trips with optional filters.
@@ -15,6 +16,8 @@ const list = async (filters = {}) => {
         include: {
             vehicle: { select: { id: true, name: true, licensePlate: true, type: true } },
             driver: { select: { id: true, name: true } },
+            deliveryProofs: true,
+            signatures: true,
         },
     });
 };
@@ -24,11 +27,30 @@ const list = async (filters = {}) => {
  */
 const listPending = async () => {
     return prisma.trip.findMany({
-        where: { status: 'DRAFT' },
+        where: { status: 'PENDING_SAFETY_APPROVAL' },
         orderBy: { createdAt: 'desc' },
         include: {
-            vehicle: { select: { id: true, code: true, name: true, type: true } },
-            driver: { select: { id: true, code: true, name: true } },
+            vehicle: { select: { id: true, code: true, name: true, type: true, maxCapacityKg: true } },
+            driver: { select: { id: true, code: true, name: true, licenseExpiry: true, safetyScore: true } },
+        },
+    });
+};
+
+/**
+ * Get trips assigned to a specific driver email
+ */
+const getMyTrips = async (userEmail) => {
+    const driver = await prisma.driver.findUnique({ where: { email: userEmail } });
+    if (!driver) return [];
+
+    return prisma.trip.findMany({
+        where: { driverId: driver.id, status: { in: ['APPROVED', 'ON_TRIP'] } },
+        orderBy: { createdAt: 'desc' },
+        include: {
+            vehicle: { select: { id: true, name: true, licensePlate: true, type: true } },
+            driver: { select: { id: true, name: true } },
+            deliveryProofs: true,
+            signatures: true,
         },
     });
 };
@@ -100,7 +122,7 @@ const create = async (data) => {
     }
 
     // Create as DRAFT — no state change yet
-    return prisma.trip.create({
+    const newTrip = await prisma.trip.create({
         data: {
             vehicleId: data.vehicleId,
             driverId: data.driverId,
@@ -110,55 +132,123 @@ const create = async (data) => {
             cargoWeightKg: data.cargoWeightKg,
             startOdometerKm: data.startOdometerKm || vehicle.odometerKm,
             revenue: data.revenue,
-            status: 'DRAFT',
+            status: 'PENDING_SAFETY_APPROVAL',
         },
         include: {
             vehicle: { select: { name: true, licensePlate: true } },
             driver: { select: { name: true } },
         },
     });
+
+    if (io.getIo()) {
+        io.getIo().emit('trip_status_change', { tripId: newTrip.id, status: newTrip.status });
+    }
+    return newTrip;
 };
 
 /**
- * Dispatch a trip: DRAFT → DISPATCHED.
- * Locks vehicle and driver (ON_TRIP).
+ * Approve a trip: PENDING_SAFETY_APPROVAL → APPROVED.
  */
-const dispatch = async (id) => {
-    const trip = await prisma.trip.findUnique({
-        where: { id },
-        include: { vehicle: true, driver: true },
-    });
-
+const approve = async (id, safetyInspectionData) => {
+    const trip = await prisma.trip.findUnique({ where: { id } });
     if (!trip) {
         const error = new Error('Trip not found.');
         error.statusCode = 404;
         throw error;
     }
 
-    if (trip.status !== 'DRAFT') {
-        const error = new Error(`Cannot dispatch a trip with status "${trip.status}". Must be DRAFT.`);
+    if (trip.status !== 'PENDING_SAFETY_APPROVAL') {
+        const error = new Error(`Cannot approve a trip with status "${trip.status}". Must be PENDING_SAFETY_APPROVAL.`);
         error.statusCode = 400;
         throw error;
     }
 
-    // Re-validate availability at dispatch time
-    if (trip.vehicle.status !== 'AVAILABLE') {
-        const error = new Error(`Vehicle "${trip.vehicle.name}" is not available (current: ${trip.vehicle.status}).`);
+    const result = await prisma.$transaction([
+        prisma.trip.update({
+            where: { id },
+            data: { status: 'APPROVED' },
+        }),
+        prisma.safetyInspection.create({
+            data: {
+                tripId: id,
+                driverId: trip.driverId,
+                photoUrl: safetyInspectionData.photoUrl,
+                status: 'APPROVED',
+            }
+        })
+    ]);
+
+    try { io.getIo().emit('trip_status_change', { tripId: id, status: 'APPROVED' }); } catch (err) { }
+    return result;
+};
+
+/**
+ * Decline a trip: PENDING_SAFETY_APPROVAL → DRAFT.
+ */
+const decline = async (id, declineReason, photoUrl) => {
+    const trip = await prisma.trip.findUnique({ where: { id } });
+    if (!trip) {
+        const error = new Error('Trip not found.');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (trip.status !== 'PENDING_SAFETY_APPROVAL') {
+        const error = new Error(`Cannot decline a trip with status "${trip.status}". Must be PENDING_SAFETY_APPROVAL.`);
         error.statusCode = 400;
         throw error;
+    }
+
+    const result = await prisma.$transaction([
+        prisma.trip.update({
+            where: { id },
+            data: { status: 'DRAFT' },
+        }),
+        prisma.safetyInspection.create({
+            data: {
+                tripId: id,
+                driverId: trip.driverId,
+                photoUrl: photoUrl || '',
+                status: 'DECLINED',
+                declinedReason: declineReason
+            }
+        })
+    ]);
+
+    try { io.getIo().emit('trip_status_change', { tripId: id, status: 'DRAFT' }); } catch (err) { }
+    return result;
+};
+
+/**
+ * Accept trip by driver: APPROVED → ON_TRIP.
+ * Locks vehicle and driver.
+ */
+const acceptTrip = async (id) => {
+    const trip = await prisma.trip.findUnique({
+        where: { id },
+        include: { vehicle: true, driver: true },
+    });
+
+    if (!trip) {
+        throw Object.assign(new Error('Trip not found.'), { statusCode: 404 });
+    }
+
+    if (trip.status !== 'APPROVED') {
+        throw Object.assign(new Error(`Cannot accept a trip with status "${trip.status}". Must be APPROVED.`), { statusCode: 400 });
+    }
+
+    if (trip.vehicle.status !== 'AVAILABLE') {
+        throw Object.assign(new Error(`Vehicle "${trip.vehicle.name}" is not available.`), { statusCode: 400 });
     }
 
     if (trip.driver.status !== 'ON_DUTY') {
-        const error = new Error(`Driver "${trip.driver.name}" is not on duty (current: ${trip.driver.status}).`);
-        error.statusCode = 400;
-        throw error;
+        throw Object.assign(new Error(`Driver "${trip.driver.name}" is not on duty.`), { statusCode: 400 });
     }
 
-    // Transactional: update trip + vehicle + driver
-    return prisma.$transaction([
+    const result = await prisma.$transaction([
         prisma.trip.update({
             where: { id },
-            data: { status: 'DISPATCHED', dispatchedAt: new Date() },
+            data: { status: 'ON_TRIP', dispatchedAt: new Date() },
         }),
         prisma.vehicle.update({
             where: { id: trip.vehicleId },
@@ -169,6 +259,8 @@ const dispatch = async (id) => {
             data: { status: 'ON_TRIP', totalTrips: { increment: 1 } },
         }),
     ]);
+    try { io.getIo().emit('trip_status_change', { tripId: id, status: 'ON_TRIP' }); } catch (err) { }
+    return result;
 };
 
 /**
@@ -184,13 +276,13 @@ const complete = async (id, endOdometerKm) => {
         throw error;
     }
 
-    if (trip.status !== 'DISPATCHED') {
-        const error = new Error(`Cannot complete a trip with status "${trip.status}". Must be DISPATCHED.`);
+    if (trip.status !== 'ON_TRIP') {
+        const error = new Error(`Cannot complete a trip with status "${trip.status}". Must be ON_TRIP.`);
         error.statusCode = 400;
         throw error;
     }
 
-    return prisma.$transaction([
+    const result = await prisma.$transaction([
         prisma.trip.update({
             where: { id },
             data: { status: 'COMPLETED', endOdometerKm, completedAt: new Date() },
@@ -204,6 +296,8 @@ const complete = async (id, endOdometerKm) => {
             data: { status: 'ON_DUTY', completedTrips: { increment: 1 } },
         }),
     ]);
+    try { io.getIo().emit('trip_status_change', { tripId: id, status: 'COMPLETED' }); } catch (err) { }
+    return result;
 };
 
 /**
@@ -230,7 +324,7 @@ const cancel = async (id) => {
     ];
 
     // If dispatched, release vehicle and driver
-    if (trip.status === 'DISPATCHED') {
+    if (trip.status === 'ON_TRIP') {
         operations.push(
             prisma.vehicle.update({
                 where: { id: trip.vehicleId },
@@ -243,7 +337,59 @@ const cancel = async (id) => {
         );
     }
 
-    return prisma.$transaction(operations);
+    const result = await prisma.$transaction(operations);
+    try { io.getIo().emit('trip_status_change', { tripId: id, status: 'CANCELLED' }); } catch (err) { }
+    return result;
 };
 
-module.exports = { list, listPending, getById, create, dispatch, complete, cancel };
+/**
+ * Upload delivery proof
+ */
+const uploadProof = async (id, data) => {
+    const proof = await prisma.deliveryProof.create({
+        data: {
+            tripId: id,
+            photoUrl: data.photoUrl,
+            notes: data.notes
+        }
+    });
+    try { io.getIo().emit('delivery_verification', { tripId: id, proofId: proof.id }); } catch (err) { }
+    return proof;
+};
+
+/**
+ * Upload signature
+ */
+const uploadSignature = async (id, data) => {
+    return prisma.signature.create({
+        data: {
+            tripId: id,
+            signatureUrl: data.signatureUrl
+        }
+    });
+};
+
+/**
+ * Verify Delivery Proof
+ */
+const verifyDelivery = async (id) => {
+    // Verifies all proofs for a trip
+    return prisma.deliveryProof.updateMany({
+        where: { tripId: id },
+        data: { verified: true }
+    });
+};
+
+/**
+ * Reject Delivery Proof
+ */
+const rejectDelivery = async (id, reason) => {
+    // Delete all unverified proofs and signatures so driver can re-submit
+    const result = await prisma.$transaction([
+        prisma.deliveryProof.deleteMany({ where: { tripId: id, verified: false } }),
+        prisma.signature.deleteMany({ where: { tripId: id } })
+    ]);
+    return { success: true, message: 'Proof rejected, driver must resubmit.', reason };
+};
+
+module.exports = { list, listPending, getMyTrips, getById, create, approve, decline, acceptTrip, complete, cancel, uploadProof, uploadSignature, verifyDelivery, rejectDelivery };

@@ -3,22 +3,22 @@
 // and route access. To add a new role, add an entry here — no other files need changes.
 
 export const ROLES = {
-    FLEET_MANAGER: 'Fleet Manager',
+    MANAGER: 'Fleet Manager',
     DISPATCHER: 'Dispatcher',
     SAFETY_OFFICER: 'Safety Officer',
-    FINANCIAL_ANALYST: 'Financial Analyst',
+    DRIVER: 'Driver',
 };
 
 const roleConfig = {
     // ───────────────────────────────────────── Fleet Manager (full access)
-    [ROLES.FLEET_MANAGER]: {
+    [ROLES.MANAGER]: {
         sidebarItems: [
-            '/dashboard', '/vehicles', '/trips', '/maintenance', '/expenses', '/drivers', '/analytics', '/user-management',
+            '/dashboard', '/vehicles', '/trips', '/maintenance', '/expenses', '/drivers', '/analytics', '/manager/users',
         ],
         readOnlyPages: [],
-        routeAccess: ['/dashboard', '/vehicles', '/trips', '/maintenance', '/expenses', '/drivers', '/analytics', '/user-management'],
+        routeAccess: ['/dashboard', '/vehicles', '/trips', '/maintenance', '/expenses', '/drivers', '/analytics', '/manager/users'],
         dashboardKPIs: ['activeFleet', 'maintenanceAlerts', 'utilizationRate', 'pendingCargo'],
-        dashboardWidgets: ['liveFleetMap', 'fleetStatusChart', 'recentTrips', 'roiCard', 'costPerKmCard'],
+        dashboardWidgets: ['liveFleetMap', 'fleetStatusChart', 'recentTrips', 'roiCard', 'costPerKmCard', 'suspiciousFuelActivity'],
         permissions: {
             canCreateVehicle: true,
             canEditVehicle: true,
@@ -68,9 +68,9 @@ const roleConfig = {
 
     // ───────────────────────────────────────── Safety Officer
     [ROLES.SAFETY_OFFICER]: {
-        sidebarItems: ['/dashboard', '/drivers', '/maintenance'],
+        sidebarItems: ['/dashboard', '/safety/pending-trips', '/drivers', '/maintenance'],
         readOnlyPages: ['/maintenance'],
-        routeAccess: ['/dashboard', '/drivers', '/maintenance'],
+        routeAccess: ['/dashboard', '/safety/pending-trips', '/drivers', '/maintenance'],
         dashboardKPIs: ['driversOnDuty', 'licenseExpiryAlerts', 'suspendedDrivers', 'vehiclesInShop'],
         dashboardWidgets: ['complianceAlertPanel', 'safetyScoreChart'],
         permissions: {
@@ -93,13 +93,13 @@ const roleConfig = {
         },
     },
 
-    // ───────────────────────────────────────── Financial Analyst
-    [ROLES.FINANCIAL_ANALYST]: {
-        sidebarItems: ['/dashboard', '/expenses', '/analytics', '/trips'],
-        readOnlyPages: ['/trips'],
-        routeAccess: ['/dashboard', '/expenses', '/analytics', '/trips'],
-        dashboardKPIs: ['totalOpsCost', 'fuelEfficiency', 'vehicleROI', 'monthlyExpenseSummary'],
-        dashboardWidgets: ['costBreakdownDonut', 'roiTable'],
+    // ───────────────────────────────────────── Driver
+    [ROLES.DRIVER]: {
+        sidebarItems: ['/driver/dashboard'],
+        readOnlyPages: [],
+        routeAccess: ['/driver/dashboard'],
+        dashboardKPIs: [],
+        dashboardWidgets: [],
         permissions: {
             canCreateVehicle: false,
             canEditVehicle: false,
@@ -115,7 +115,7 @@ const roleConfig = {
             canAddDriver: false,
             canEditDriver: false,
             canToggleDriverStatus: false,
-            canExportReports: true,
+            canExportReports: false,
             canManageUsers: false,
         },
     },
@@ -123,7 +123,7 @@ const roleConfig = {
 
 /** Get config for a role. Falls back to empty permissions for unknown roles. */
 export function getRoleConfig(role) {
-    return roleConfig[role] || roleConfig[ROLES.FLEET_MANAGER];
+    return roleConfig[role] || roleConfig[ROLES.MANAGER];
 }
 
 /** Check if a role has access to a specific route */

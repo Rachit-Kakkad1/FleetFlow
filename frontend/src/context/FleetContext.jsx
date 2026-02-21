@@ -66,6 +66,13 @@ export function FleetProvider({ children }) {
             dispatch({ type: 'SET_USER', payload: user });
             refresh();
         }
+
+        const handleAuthError = () => {
+            dispatch({ type: 'SET_USER', payload: null });
+        };
+
+        window.addEventListener('auth-error', handleAuthError);
+        return () => window.removeEventListener('auth-error', handleAuthError);
     }, [refresh]);
 
     const showToast = useCallback((message, type = 'success') => {

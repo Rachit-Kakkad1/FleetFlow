@@ -63,4 +63,13 @@ const remove = async (req, res, next) => {
     }
 };
 
-module.exports = { list, listAvailable, getById, create, update, updateStatus, remove };
+const triggerSos = async (req, res, next) => {
+    try {
+        const result = await driverService.triggerSos(req.body);
+        res.status(201).json({ success: true, message: 'SOS triggered', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+module.exports = { list, listAvailable, getById, create, update, updateStatus, remove, triggerSos };

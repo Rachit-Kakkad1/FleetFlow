@@ -15,4 +15,6 @@ router.put('/:id', authorize('MANAGER'), validate(updateDriverSchema), ctrl.upda
 router.patch('/:id/status', authorize('MANAGER', 'SAFETY_OFFICER'), validate(updateDriverStatusSchema), ctrl.updateStatus);
 router.delete('/:id', authorize('MANAGER'), ctrl.remove);
 
+router.post('/sos', authorize('DRIVER'), ctrl.triggerSos);
+
 module.exports = router;

@@ -1,4 +1,25 @@
 const prisma = require('../config/db');
+const { getIo } = require('../socket');
+
+/**
+ * Trigger SOS alert
+ */
+const triggerSos = async (data) => {
+    const alert = await prisma.sosAlert.create({
+        data: {
+            driverId: data.driverId,
+            vehicleId: data.vehicleId,
+            gpsLat: data.gpsLat,
+            gpsLng: data.gpsLng
+        }
+    });
+
+    try {
+        getIo().emit('sos_alert', { vehicleId: data.vehicleId, alertId: alert.id });
+    } catch (err) { }
+
+    return alert;
+};
 
 const list = async (filters = {}) => {
     const where = {};
@@ -91,4 +112,4 @@ const remove = async (id) => {
     return { success: true };
 };
 
-module.exports = { list, listAvailable, getById, create, update, updateStatus, remove };
+module.exports = { list, listAvailable, getById, create, update, updateStatus, remove, triggerSos };

@@ -25,6 +25,18 @@ const login = async (email, password) => {
         throw error;
     }
 
+    if (!user.isActive) {
+        const error = new Error('Your account is deactivated.');
+        error.statusCode = 403;
+        throw error;
+    }
+
+    if (user.role !== 'MANAGER' && !user.createdBy) {
+        const error = new Error('Access denied. User not created by a Manager.');
+        error.statusCode = 403;
+        throw error;
+    }
+
     const token = generateToken(user);
     return {
         token,

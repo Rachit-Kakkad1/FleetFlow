@@ -26,12 +26,12 @@ function createPopupContent(item) {
     `;
 }
 
-function createMarkerIcon(status, isVehicle = false) {
-    const color = STATUS_COLORS[status] || '#94a3b8';
+function createMarkerIcon(status, isVehicle = false, routeColor = null) {
+    const color = routeColor || STATUS_COLORS[status] || '#94a3b8';
     if (isVehicle) {
         return L.divIcon({
             className: 'fleet-marker',
-            html: `<div class="fleet-vehicle-marker"></div>`,
+            html: `<div class="fleet-vehicle-marker" style="border-color: ${color}; box-shadow: 0 0 10px ${color}80, inset 0 0 8px ${color}80;"></div>`,
             iconSize: [22, 22],
             iconAnchor: [11, 11],
         });
@@ -39,7 +39,7 @@ function createMarkerIcon(status, isVehicle = false) {
     const cls = status.toLowerCase().replace(' ', '-');
     return L.divIcon({
         className: 'fleet-marker',
-        html: `<div class="fleet-marker-inner ${cls}"></div>`,
+        html: `<div class="fleet-marker-inner ${cls}" style="background-color: ${color}"></div>`,
         iconSize: [14, 14],
         iconAnchor: [7, 7],
     });
@@ -164,12 +164,12 @@ export default function LiveFleetMap({ trips, vehicles, drivers }) {
 
         for (const item of mapData) {
             if (item.status === 'On Trip') {
-                // Draw blue route polyline
+                // Draw route polyline
                 if (item.route_geometry?.coordinates?.length > 1) {
                     const polyline = L.polyline(item.route_geometry.coordinates, {
-                        color: '#5A7A8A',
+                        color: item.route_color || '#5A7A8A',
                         weight: 3,
-                        opacity: 0.7,
+                        opacity: 0.8,
                         dashArray: '8 4',
                     });
                     onTripLayer.addLayer(polyline);
@@ -177,14 +177,14 @@ export default function LiveFleetMap({ trips, vehicles, drivers }) {
 
                 // Origin marker
                 const originMarker = L.marker([item.origin_lat, item.origin_lng], {
-                    icon: createMarkerIcon('On Trip'),
+                    icon: createMarkerIcon('On Trip', false, item.route_color),
                 }).bindPopup(createPopupContent(item));
                 onTripLayer.addLayer(originMarker);
 
                 // Animated vehicle marker
                 const startPos = item.route_geometry?.coordinates?.[0] || [item.origin_lat, item.origin_lng];
                 const vehicleMarker = L.marker(startPos, {
-                    icon: createMarkerIcon('On Trip', true),
+                    icon: createMarkerIcon('On Trip', true, item.route_color),
                     zIndexOffset: 1000,
                 }).bindPopup(createPopupContent(item));
                 onTripLayer.addLayer(vehicleMarker);
@@ -314,7 +314,7 @@ export default function LiveFleetMap({ trips, vehicles, drivers }) {
                 <div className="fleet-map-legend">
                     <div className="fleet-map-legend-title">Legend</div>
                     <div className="fleet-map-legend-item">
-                        <div className="fleet-map-legend-dot" style={{ background: '#5A7A8A' }} />
+                        <div className="fleet-map-legend-dot" style={{ background: 'conic-gradient(#3B82F6, #10B981, #F59E0B, #EC4899, #3B82F6)' }} />
                         <span>On Trip</span>
                     </div>
                     <div className="fleet-map-legend-item">
@@ -330,7 +330,7 @@ export default function LiveFleetMap({ trips, vehicles, drivers }) {
 
             <div className="fleet-map-stats">
                 <div className="fleet-map-stat">
-                    <div className="fleet-map-stat-dot" style={{ background: '#5A7A8A' }} />
+                    <div className="fleet-map-stat-dot" style={{ background: 'conic-gradient(#3B82F6, #10B981, #F59E0B, #EC4899, #3B82F6)' }} />
                     <strong>{counts.onTrip}</strong> On Trip
                 </div>
                 <div className="fleet-map-stat">

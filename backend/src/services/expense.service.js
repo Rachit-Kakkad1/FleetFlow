@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { getIo } = require('../socket');
 
 const list = async (filters = {}) => {
     const where = {};
@@ -30,7 +31,7 @@ const create = async (data) => {
         throw error;
     }
 
-    return prisma.expense.create({
+    const expense = await prisma.expense.create({
         data: {
             vehicleId: data.vehicleId,
             tripId: data.tripId || null,
@@ -41,6 +42,40 @@ const create = async (data) => {
             notes: data.notes || null,
         },
     });
+
+    // --- Fuel Anomaly Detection Logic ---
+    if (data.category === 'FUEL' && data.liters && data.tripId) {
+        const trip = await prisma.trip.findUnique({ where: { id: data.tripId } });
+        if (trip) {
+            let distanceTravelled = Math.max(0, vehicle.odometerKm - trip.startOdometerKm);
+            if (distanceTravelled === 0) distanceTravelled = 100; // Fallback if odo wasn't updated
+
+            const baselineMap = { TRUCK: 5, VAN: 10, BIKE: 40 };
+            const baseline = baselineMap[vehicle.type] || 10;
+            const expectedFuel = distanceTravelled / baseline;
+
+            if (data.liters > expectedFuel * 1.15) {
+                // Auto-create FuelAnomaly record
+                const anomaly = await prisma.fuelAnomaly.create({
+                    data: {
+                        vehicleId: vehicle.id,
+                        driverId: trip.driverId,
+                        tripId: trip.id,
+                        expectedFuel,
+                        loggedFuel: data.liters,
+                        difference: data.liters - expectedFuel,
+                        status: 'PENDING_REVIEW'
+                    }
+                });
+
+                try {
+                    getIo().emit('fuel_anomaly', { vehicleId: vehicle.id, tripId: trip.id, anomalyId: anomaly.id });
+                } catch (err) { }
+            }
+        }
+    }
+
+    return expense;
 };
 
 /**
@@ -77,4 +112,21 @@ const getTotalCostByVehicle = async (vehicleId) => {
     };
 };
 
-module.exports = { list, create, getTotalCostByVehicle };
+const getAnomalies = async () => {
+    return prisma.fuelAnomaly.findMany({
+        orderBy: { date: 'desc' },
+        include: {
+            vehicle: { select: { id: true, name: true, licensePlate: true } },
+            trip: { select: { id: true, code: true } }
+        }
+    });
+};
+
+const resolveAnomaly = async (id) => {
+    return prisma.fuelAnomaly.update({
+        where: { id },
+        data: { status: 'CLEARED' }
+    });
+};
+
+module.exports = { list, create, getTotalCostByVehicle, getAnomalies, resolveAnomaly };

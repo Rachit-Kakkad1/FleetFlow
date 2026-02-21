@@ -4,20 +4,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Truck, Navigation, Wrench, DollarSign,
   Users, BarChart3, Settings, PanelLeftClose, PanelLeftOpen,
-  LogOut, Zap,
+  LogOut, Zap, ClipboardCheck
 } from 'lucide-react';
 import { useFleet } from '../context/FleetContext';
 import { getRoleConfig } from '../config/roleConfig';
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Command Center', icon: LayoutDashboard },
+  { path: '/safety/pending-trips', label: 'Safety Approvals', icon: ClipboardCheck },
   { path: '/vehicles', label: 'Vehicles', icon: Truck },
   { path: '/trips', label: 'Trips', icon: Navigation },
   { path: '/maintenance', label: 'Maintenance', icon: Wrench },
   { path: '/expenses', label: 'Expenses', icon: DollarSign },
   { path: '/drivers', label: 'Drivers', icon: Users },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { path: '/user-management', label: 'Users', icon: Settings },
+  { path: '/manager/users', label: 'Users', icon: Settings },
 ];
 
 const COLLAPSED_KEY = 'fleetflow-sidebar-collapsed';

@@ -1,8 +1,35 @@
 // ─── Fleet Geo Data Layer ─────────────────────────────────────────────────────
 // Pre-computed coordinates and route geometries for Gujarat cities.
 // No routing API calls needed — all geometry is stored here.
+const ROUTE_COLORS = [
+    '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+    '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
+    '#14B8A6', '#EAB308', '#6366F1', '#F43F5E'
+];
+
+function getRouteColor(tripId) {
+    if (!tripId) return ROUTE_COLORS[0];
+    let hash = 0;
+    for (let i = 0; i < tripId.length; i++) {
+        hash = tripId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return ROUTE_COLORS[Math.abs(hash) % ROUTE_COLORS.length];
+}
 
 export const cityCoords = {
+    'Pune': { lat: 18.5204, lng: 73.8567 },
+    'Delhi': { lat: 28.7041, lng: 77.1025 },
+    'Jaipur': { lat: 26.9124, lng: 75.7873 },
+    'Lucknow': { lat: 26.8467, lng: 80.9462 },
+    'Bangalore': { lat: 12.9716, lng: 77.5946 },
+    'Chennai': { lat: 13.0827, lng: 80.2707 },
+    'Mysore': { lat: 12.2958, lng: 76.6394 },
+    'Coimbatore': { lat: 11.0168, lng: 76.9558 },
+    'Madurai': { lat: 9.9252, lng: 78.1198 },
+    'Trichy': { lat: 10.7905, lng: 78.7047 },
+    'Udaipur': { lat: 24.5854, lng: 73.7125 },
+    'Nashik': { lat: 20.0110, lng: 73.7905 },
+    'Agra': { lat: 27.1767, lng: 78.0081 },
     'Ahmedabad': { lat: 23.0225, lng: 72.5714 },
     'Surat': { lat: 21.1702, lng: 72.8311 },
     'Vadodara': { lat: 22.3072, lng: 73.1812 },
@@ -133,7 +160,7 @@ export function getFleetMapData(trips, vehicles, drivers) {
             vehicle_type: vehicle.type,
             region: vehicle.region,
             driver_name: driver.name,
-            status: trip.status === 'Dispatched' ? 'On Trip' : trip.status,
+            status: trip.status === 'ON_TRIP' || trip.status === 'On Trip' ? 'On Trip' : (trip.status === 'COMPLETED' ? 'Completed' : trip.status),
             origin_name: trip.origin,
             origin_lat: originCoord.lat,
             origin_lng: originCoord.lng,
@@ -145,6 +172,7 @@ export function getFleetMapData(trips, vehicles, drivers) {
                 type: 'LineString',
                 coordinates: getRouteGeometry(trip.origin, trip.destination),
             },
+            route_color: getRouteColor(trip.id),
         });
     }
 

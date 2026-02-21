@@ -46,17 +46,30 @@ export default function Trips() {
     setForm({ vehicleId: '', driverId: '', origin: '', destination: '', cargoWeight: '', description: '' });
   };
 
-  const handleDispatch = (trip) => {
-    tripService.dispatch(trip.id); refresh();
-    showToast(`Trip ${trip.id} dispatched!`);
-  };
 
-  const handleComplete = () => {
+
+  const handleComplete = async () => {
     if (!endOdometer) { showToast('Enter final odometer reading', 'error'); return; }
-    tripService.complete(completeTrip.id, Number(endOdometer));
+    await tripService.complete(completeTrip.id, Number(endOdometer));
     refresh();
     showToast(`Trip ${completeTrip.id} completed!`);
     setCompleteTrip(null); setEndOdometer('');
+  };
+
+  const handleVerify = async () => {
+    await tripService.verifyDelivery(completeTrip.id);
+    showToast('Delivery verification cleared!');
+    refresh();
+    setCompleteTrip({ ...completeTrip, deliveryProofs: [{ verified: true }] }); // Optimistic UI update
+  };
+
+  const handleRejectDelivery = async () => {
+    const reason = window.prompt("Reason for rejecting delivery proof?");
+    if (!reason) return;
+    await tripService.rejectDelivery(completeTrip.id, reason);
+    showToast('Delivery proof rejected. Driver notified.', 'error');
+    refresh();
+    setCompleteTrip(null);
   };
 
   const handleCancel = (trip) => {
@@ -73,15 +86,15 @@ export default function Trips() {
     { key: 'route', label: 'Route', render: (r) => `${r.origin} → ${r.destination}`, sortable: false },
     { key: 'cargoWeight', label: 'Cargo', render: (r) => <span className="mono">{r.cargoWeight.toLocaleString()} kg</span> },
     { key: 'status', label: 'Status', render: (r) => <StatusChip status={r.status} /> },
+    { key: 'proof', label: 'Proof', render: (r) => (r.deliveryProofs?.length > 0 ? (r.deliveryProofs[0].verified ? '✅ Verified' : '⏳ Pending') : '—') },
     ...(!readOnly ? [{
       key: 'actions', label: '', sortable: false, render: (r) => (
         <div style={{ display: 'flex', gap: 4, opacity: 0.7 }}
           onMouseEnter={e => e.currentTarget.style.opacity = 1}
           onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
         >
-          {r.status === 'Draft' && perms.canDispatchTrip && <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); handleDispatch(r); }}>Dispatch</button>}
-          {r.status === 'Dispatched' && perms.canCompleteTrip && <button className="btn btn-success btn-sm" onClick={e => { e.stopPropagation(); setCompleteTrip(r); setEndOdometer(''); }}>Complete</button>}
-          {(r.status === 'Draft' || r.status === 'Dispatched') && perms.canCancelTrip && <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); handleCancel(r); }}>Cancel</button>}
+          {r.status === 'On Trip' && perms.canCompleteTrip && <button className="btn btn-success btn-sm" onClick={e => { e.stopPropagation(); setCompleteTrip(r); setEndOdometer(''); }}>Review & Complete</button>}
+          {['Draft', 'Pending Safety Approval', 'Approved', 'On Trip'].includes(r.status) && perms.canCancelTrip && <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); handleCancel(r); }}>Cancel</button>}
         </div>
       )
     }] : []),
@@ -165,13 +178,30 @@ export default function Trips() {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
               {completeTrip.origin} → {completeTrip.destination} · {vehicleMap[completeTrip.vehicleId]?.name}
             </p>
+            {completeTrip.deliveryProofs?.length > 0 && (
+              <div style={{ background: 'var(--bg-active)', padding: 12, borderRadius: 8 }}>
+                <h6>Delivery Proof</h6>
+                <img src={completeTrip.deliveryProofs[completeTrip.deliveryProofs.length - 1].photoUrl} alt="Proof" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 6, margin: '8px 0' }} />
+                {completeTrip.signatures?.length > 0 && <img src={completeTrip.signatures[completeTrip.signatures.length - 1].signatureUrl} alt="Signature" style={{ width: '100%', height: 60, objectFit: 'contain', background: '#fff', borderRadius: 4 }} />}
+
+                {!completeTrip.deliveryProofs[0].verified ? (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button className="btn btn-sm btn-success" style={{ flex: 1 }} onClick={handleVerify}>Verify Proof</button>
+                    <button className="btn btn-sm btn-danger" style={{ flex: 1 }} onClick={handleRejectDelivery}>Reject Proof</button>
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--status-success)', margin: '8px 0 0', fontWeight: 600 }}>✅ Proof Verified</p>
+                )}
+              </div>
+            )}
+
             <div className="form-group">
               <label>Final Odometer Reading (km) *</label>
               <input className="form-input" type="number" placeholder="e.g. 45000" value={endOdometer} onChange={e => setEndOdometer(e.target.value)} />
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-ghost" onClick={() => setCompleteTrip(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleComplete}>Mark Complete</button>
+              <button className="btn btn-primary" onClick={handleComplete} disabled={completeTrip.deliveryProofs?.length > 0 && !completeTrip.deliveryProofs[0].verified}>Mark Complete</button>
             </div>
           </div>
         )}

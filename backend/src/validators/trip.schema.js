@@ -15,4 +15,13 @@ const completeTripSchema = z.object({
     endOdometerKm: z.number().min(0, 'End odometer reading is required'),
 });
 
-module.exports = { createTripSchema, completeTripSchema };
+const uploadProofSchema = z.object({
+    photoUrl: z.string().url('A valid photo URL is required'),
+    notes: z.string().optional()
+});
+
+const uploadSignatureSchema = z.object({
+    signatureUrl: z.string().url('A valid signature URL is required')
+});
+
+module.exports = { createTripSchema, completeTripSchema, uploadProofSchema, uploadSignatureSchema };

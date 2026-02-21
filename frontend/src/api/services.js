@@ -12,7 +12,8 @@ const mapVehicleParams = (veh) => {
 const mapVehicleResp = (veh) => ({
     ...veh,
     maxCapacity: veh.maxCapacityKg,
-    odometer: veh.odometerKm
+    odometer: veh.odometerKm,
+    status: veh.status ? veh.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : veh.status
 });
 
 export const vehicleService = {
@@ -76,17 +77,23 @@ const mapTripResp = (trp) => ({
     cargoWeight: trp.cargoWeightKg,
     description: trp.cargoDescription,
     startOdometer: trp.startOdometerKm,
-    endOdometer: trp.endOdometerKm
+    endOdometer: trp.endOdometerKm,
+    status: trp.status ? trp.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : trp.status
 });
 
 export const tripService = {
     getAll: async () => { try { const { data } = await apiClient.get('/trips'); return data.data.map(mapTripResp); } catch (e) { return []; } },
     getById: async (id) => { const { data } = await apiClient.get(`/trips/${id}`); return mapTripResp(data.data); },
     getPending: async () => { try { const { data } = await apiClient.get('/trips/pending'); return data.data.map(mapTripResp); } catch (e) { return []; } },
+    getMyTrips: async () => { try { const { data } = await apiClient.get('/trips/me'); return data.data.map(mapTripResp); } catch (e) { return []; } },
     create: async (trip) => { const { data } = await apiClient.post('/trips', mapTripParams(trip)); return mapTripResp(data.data); },
-    dispatch: async (id) => { const { data } = await apiClient.patch(`/trips/${id}/dispatch`); return mapTripResp(data.data); },
+    approve: async (id, photoUrl) => { const { data } = await apiClient.patch(`/trips/${id}/approve`, { photoUrl }); return mapTripResp(data.data); },
+    decline: async (id, reason, photoUrl) => { const { data } = await apiClient.patch(`/trips/${id}/decline`, { reason, photoUrl }); return mapTripResp(data.data); },
+    acceptTrip: async (id) => { const { data } = await apiClient.patch(`/trips/${id}/accept`); return mapTripResp(data.data); },
     complete: async (id, endOdometer) => { const { data } = await apiClient.patch(`/trips/${id}/complete`, { endOdometerKm: Number(endOdometer) }); return mapTripResp(data.data); },
     cancel: async (id) => { const { data } = await apiClient.patch(`/trips/${id}/cancel`); return mapTripResp(data.data); },
+    verifyDelivery: async (id) => { const { data } = await apiClient.patch(`/trips/${id}/verify-delivery`); return data.data; },
+    rejectDelivery: async (id, reason) => { const { data } = await apiClient.patch(`/trips/${id}/reject-delivery`, { reason }); return data.data; },
 };
 
 // ===== MAINTENANCE =====
@@ -140,6 +147,8 @@ export const expenseService = {
             return { fuelCost: 0, maintCost: 0, total: 0 };
         }
     },
+    getAnomalies: async () => { try { const { data } = await apiClient.get('/expenses/anomalies'); return data.data; } catch (e) { return []; } },
+    resolveAnomaly: async (id) => { const { data } = await apiClient.patch(`/expenses/anomalies/${id}/resolve`); return data.data; },
 };
 
 // ===== ANALYTICS & DASHBOARD =====
@@ -196,3 +205,4 @@ export const authService = {
         return user ? JSON.parse(user) : null;
     },
 };
+

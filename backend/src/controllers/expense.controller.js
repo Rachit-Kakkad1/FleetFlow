@@ -27,4 +27,22 @@ const getTotalCost = async (req, res, next) => {
     }
 };
 
-module.exports = { list, create, getTotalCost };
+const getAnomalies = async (req, res, next) => {
+    try {
+        const anomalies = await expenseService.getAnomalies();
+        res.json({ success: true, data: anomalies });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const resolveAnomaly = async (req, res, next) => {
+    try {
+        const result = await expenseService.resolveAnomaly(req.params.id);
+        res.json({ success: true, message: 'Anomaly resolved', data: result });
+    } catch (error) {
+        next(error);
+    }
+};
+
+module.exports = { list, create, getTotalCost, getAnomalies, resolveAnomaly };
