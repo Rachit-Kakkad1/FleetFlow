@@ -1,0 +1,14 @@
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--bg-page);
+  transition: margin-left 200ms ease;
+}
+
+/* When sidebar is collapsed, JS will toggle a class or we use localStorage */
