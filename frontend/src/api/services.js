@@ -1,258 +1,194 @@
-// FleetFlow API Service Layer
-// Currently uses localStorage. Backend team can swap these with fetch() calls.
-
-const getStore = (key) => JSON.parse(localStorage.getItem(key) || '[]');
-const setStore = (key, data) => localStorage.setItem(key, JSON.stringify(data));
-const generateId = (prefix) => `${prefix}${String(getStore(`ff_${prefix.toLowerCase()}s`).length + 1).padStart(3, '0')}`;
+import apiClient from './client';
 
 // ===== VEHICLES =====
+const mapVehicleParams = (veh) => {
+    const data = { ...veh };
+    if ('maxCapacity' in data) { data.maxCapacityKg = Number(data.maxCapacity); delete data.maxCapacity; }
+    if ('odometer' in data) { data.odometerKm = Number(data.odometer); delete data.odometer; }
+    if ('acquisitionCost' in data) { data.acquisitionCost = Number(data.acquisitionCost); }
+    return data;
+};
+
+const mapVehicleResp = (veh) => ({
+    ...veh,
+    maxCapacity: veh.maxCapacityKg,
+    odometer: veh.odometerKm
+});
+
 export const vehicleService = {
-    getAll: () => getStore('ff_vehicles'),
-    getById: (id) => getStore('ff_vehicles').find(v => v.id === id),
-    getAvailable: () => getStore('ff_vehicles').filter(v => v.status === 'Available'),
-
-    create: (vehicle) => {
-        const vehicles = getStore('ff_vehicles');
-        const newVehicle = {
-            ...vehicle,
-            id: `V${String(vehicles.length + 1).padStart(3, '0')}`,
-            status: 'Available',
-        };
-        vehicles.push(newVehicle);
-        setStore('ff_vehicles', vehicles);
-        return newVehicle;
-    },
-
-    update: (id, updates) => {
-        const vehicles = getStore('ff_vehicles');
-        const idx = vehicles.findIndex(v => v.id === id);
-        if (idx === -1) return null;
-        vehicles[idx] = { ...vehicles[idx], ...updates };
-        setStore('ff_vehicles', vehicles);
-        return vehicles[idx];
-    },
-
-    updateStatus: (id, status) => {
-        return vehicleService.update(id, { status });
-    },
-
-    delete: (id) => {
-        const vehicles = getStore('ff_vehicles').filter(v => v.id !== id);
-        setStore('ff_vehicles', vehicles);
-    },
+    getAll: async () => { const { data } = await apiClient.get('/vehicles'); return data.data.map(mapVehicleResp); },
+    getById: async (id) => { const { data } = await apiClient.get(`/vehicles/${id}`); return mapVehicleResp(data.data); },
+    getAvailable: async () => { const { data } = await apiClient.get('/vehicles/available'); return data.data.map(mapVehicleResp); },
+    create: async (vehicle) => { const { data } = await apiClient.post('/vehicles', mapVehicleParams(vehicle)); return mapVehicleResp(data.data); },
+    update: async (id, updates) => { const { data } = await apiClient.put(`/vehicles/${id}`, mapVehicleParams(updates)); return mapVehicleResp(data.data); },
+    updateStatus: async (id, status) => { const { data } = await apiClient.patch(`/vehicles/${id}/status`, { status: status.toUpperCase().replace(' ', '_') }); return mapVehicleResp(data.data); },
+    retire: async (id) => { const { data } = await apiClient.patch(`/vehicles/${id}/retire`); return mapVehicleResp(data.data); },
+    delete: async (id) => { await apiClient.delete(`/vehicles/${id}`); },
 };
 
 // ===== DRIVERS =====
+const mapDriverParams = (drv) => {
+    const data = { ...drv };
+    if ('licenseNo' in data) { data.licenseNumber = data.licenseNo; delete data.licenseNo; }
+    if ('category' in data) { data.licenseCategories = [data.category]; delete data.category; }
+    if ('tripsAssigned' in data) { data.totalTrips = data.tripsAssigned; delete data.tripsAssigned; }
+    if ('tripsCompleted' in data) { data.completedTrips = data.tripsCompleted; delete data.tripsCompleted; }
+    if ('licenseExpiry' in data) { data.licenseExpiry = new Date(data.licenseExpiry).toISOString(); }
+    return data;
+};
+
+const mapDriverResp = (drv) => ({
+    ...drv,
+    licenseNo: drv.licenseNumber,
+    category: drv.licenseCategories?.[0] || 'LMV',
+    tripsAssigned: drv.totalTrips,
+    tripsCompleted: drv.completedTrips
+});
+
 export const driverService = {
-    getAll: () => getStore('ff_drivers'),
-    getById: (id) => getStore('ff_drivers').find(d => d.id === id),
-    getAvailable: () => getStore('ff_drivers').filter(d =>
-        d.status === 'On Duty' && new Date(d.licenseExpiry) > new Date()
-    ),
-
-    create: (driver) => {
-        const drivers = getStore('ff_drivers');
-        const newDriver = {
-            ...driver,
-            id: `D${String(drivers.length + 1).padStart(3, '0')}`,
-            safetyScore: 100,
-            tripsCompleted: 0,
-            tripsAssigned: 0,
-        };
-        drivers.push(newDriver);
-        setStore('ff_drivers', drivers);
-        return newDriver;
-    },
-
-    update: (id, updates) => {
-        const drivers = getStore('ff_drivers');
-        const idx = drivers.findIndex(d => d.id === id);
-        if (idx === -1) return null;
-        drivers[idx] = { ...drivers[idx], ...updates };
-        setStore('ff_drivers', drivers);
-        return drivers[idx];
-    },
-
-    updateStatus: (id, status) => {
-        return driverService.update(id, { status });
-    },
-
-    delete: (id) => {
-        const drivers = getStore('ff_drivers').filter(d => d.id !== id);
-        setStore('ff_drivers', drivers);
-    },
-
+    getAll: async () => { const { data } = await apiClient.get('/drivers'); return data.data.map(mapDriverResp); },
+    getById: async (id) => { const { data } = await apiClient.get(`/drivers/${id}`); return mapDriverResp(data.data); },
+    getAvailable: async () => { const { data } = await apiClient.get('/drivers/available'); return data.data.map(mapDriverResp); },
+    create: async (driver) => { const { data } = await apiClient.post('/drivers', mapDriverParams(driver)); return mapDriverResp(data.data); },
+    update: async (id, updates) => { const { data } = await apiClient.put(`/drivers/${id}`, mapDriverParams(updates)); return mapDriverResp(data.data); },
+    updateStatus: async (id, status) => { const { data } = await apiClient.patch(`/drivers/${id}/status`, { status: status.toUpperCase().replace(' ', '_') }); return mapDriverResp(data.data); },
+    delete: async (id) => { await apiClient.delete(`/drivers/${id}`); },
     isLicenseExpired: (driver) => new Date(driver.licenseExpiry) < new Date(),
     isLicenseExpiringSoon: (driver) => {
         const expiry = new Date(driver.licenseExpiry);
-        const now = new Date();
-        const daysUntilExpiry = (expiry - now) / (1000 * 60 * 60 * 24);
-        return daysUntilExpiry > 0 && daysUntilExpiry <= 30;
+        const days = (expiry - new Date()) / (1000 * 60 * 60 * 24);
+        return days > 0 && days <= 30;
     },
 };
 
 // ===== TRIPS =====
+const mapTripParams = (trp) => {
+    const data = { ...trp };
+    if ('cargoWeight' in data) { data.cargoWeightKg = Number(data.cargoWeight); delete data.cargoWeight; }
+    if ('description' in data) { data.cargoDescription = data.description || 'General Cargo'; delete data.description; }
+    if ('startOdometer' in data) { data.startOdometerKm = Number(data.startOdometer); delete data.startOdometer; }
+    if ('endOdometer' in data) { data.endOdometerKm = Number(data.endOdometer); delete data.endOdometer; }
+    return data;
+};
+
+const mapTripResp = (trp) => ({
+    ...trp,
+    cargoWeight: trp.cargoWeightKg,
+    description: trp.cargoDescription,
+    startOdometer: trp.startOdometerKm,
+    endOdometer: trp.endOdometerKm
+});
+
 export const tripService = {
-    getAll: () => getStore('ff_trips'),
-    getById: (id) => getStore('ff_trips').find(t => t.id === id),
-    getPending: () => getStore('ff_trips').filter(t => t.status === 'Draft'),
-
-    create: (trip) => {
-        const trips = getStore('ff_trips');
-        const newTrip = {
-            ...trip,
-            id: `T${String(trips.length + 1).padStart(3, '0')}`,
-            status: 'Draft',
-            createdAt: new Date().toISOString().split('T')[0],
-            startOdometer: null,
-            endOdometer: null,
-        };
-        trips.push(newTrip);
-        setStore('ff_trips', trips);
-        return newTrip;
-    },
-
-    dispatch: (id) => {
-        const trips = getStore('ff_trips');
-        const trip = trips.find(t => t.id === id);
-        if (!trip) return null;
-        trip.status = 'Dispatched';
-        setStore('ff_trips', trips);
-        // Update vehicle & driver status
-        vehicleService.updateStatus(trip.vehicleId, 'On Trip');
-        driverService.updateStatus(trip.driverId, 'On Trip');
-        return trip;
-    },
-
-    complete: (id, endOdometer) => {
-        const trips = getStore('ff_trips');
-        const trip = trips.find(t => t.id === id);
-        if (!trip) return null;
-        trip.status = 'Completed';
-        trip.endOdometer = endOdometer;
-        setStore('ff_trips', trips);
-        // Update vehicle & driver status
-        vehicleService.updateStatus(trip.vehicleId, 'Available');
-        driverService.updateStatus(trip.driverId, 'On Duty');
-        // Update vehicle odometer
-        vehicleService.update(trip.vehicleId, { odometer: endOdometer });
-        return trip;
-    },
-
-    cancel: (id) => {
-        const trips = getStore('ff_trips');
-        const trip = trips.find(t => t.id === id);
-        if (!trip) return null;
-        const wasDispatched = trip.status === 'Dispatched';
-        trip.status = 'Cancelled';
-        setStore('ff_trips', trips);
-        if (wasDispatched) {
-            vehicleService.updateStatus(trip.vehicleId, 'Available');
-            driverService.updateStatus(trip.driverId, 'On Duty');
-        }
-        return trip;
-    },
+    getAll: async () => { const { data } = await apiClient.get('/trips'); return data.data.map(mapTripResp); },
+    getById: async (id) => { const { data } = await apiClient.get(`/trips/${id}`); return mapTripResp(data.data); },
+    getPending: async () => { const { data } = await apiClient.get('/trips/pending'); return data.data.map(mapTripResp); },
+    create: async (trip) => { const { data } = await apiClient.post('/trips', mapTripParams(trip)); return mapTripResp(data.data); },
+    dispatch: async (id) => { const { data } = await apiClient.patch(`/trips/${id}/dispatch`); return mapTripResp(data.data); },
+    complete: async (id, endOdometer) => { const { data } = await apiClient.patch(`/trips/${id}/complete`, { endOdometerKm: Number(endOdometer) }); return mapTripResp(data.data); },
+    cancel: async (id) => { const { data } = await apiClient.patch(`/trips/${id}/cancel`); return mapTripResp(data.data); },
 };
 
 // ===== MAINTENANCE =====
+const mapMaintenanceParams = (maint) => {
+    const data = { ...maint };
+    if ('serviceType' in data) { data.description = data.serviceType; delete data.serviceType; }
+    if ('date' in data) { data.startDate = new Date(data.date).toISOString(); delete data.date; }
+    if ('cost' in data) { data.cost = Number(data.cost); }
+    if (!data.type) { data.type = 'REACTIVE'; }
+    else { data.type = data.type.toUpperCase(); }
+    return data;
+};
+
+const mapMaintenanceResp = (maint) => ({
+    ...maint,
+    serviceType: maint.description,
+    date: maint.startDate,
+});
+
 export const maintenanceService = {
-    getAll: () => getStore('ff_maintenance'),
-
-    create: (log) => {
-        const logs = getStore('ff_maintenance');
-        const newLog = {
-            ...log,
-            id: `M${String(logs.length + 1).padStart(3, '0')}`,
-            completed: false,
-        };
-        logs.push(newLog);
-        setStore('ff_maintenance', logs);
-        // Auto-logic: set vehicle "In Shop"
-        vehicleService.updateStatus(log.vehicleId, 'In Shop');
-        return newLog;
-    },
-
-    complete: (id) => {
-        const logs = getStore('ff_maintenance');
-        const log = logs.find(l => l.id === id);
-        if (!log) return null;
-        log.completed = true;
-        setStore('ff_maintenance', logs);
-        // Return vehicle to "Available"
-        vehicleService.updateStatus(log.vehicleId, 'Available');
-        return log;
-    },
-
-    getByVehicle: (vehicleId) => getStore('ff_maintenance').filter(l => l.vehicleId === vehicleId),
+    getAll: async () => { const { data } = await apiClient.get('/maintenance'); return data.data.map(mapMaintenanceResp); },
+    getByVehicle: async (vehicleId) => { const { data } = await apiClient.get(`/maintenance/vehicle/${vehicleId}`); return data.data.map(mapMaintenanceResp); },
+    create: async (log) => { const { data } = await apiClient.post('/maintenance', mapMaintenanceParams(log)); return mapMaintenanceResp(data.data); },
+    complete: async (id) => { const { data } = await apiClient.patch(`/maintenance/${id}/complete`); return mapMaintenanceResp(data.data); },
 };
 
 // ===== EXPENSES =====
+const mapExpenseParams = (exp) => {
+    const data = { ...exp };
+    if ('type' in data) { data.category = data.type.toUpperCase(); delete data.type; }
+    if ('cost' in data) { data.cost = Number(data.cost); }
+    if ('liters' in data) { data.liters = Number(data.liters); }
+    if ('date' in data) { data.date = new Date(data.date).toISOString(); }
+    return data;
+};
+
+const mapExpenseResp = (exp) => ({ ...exp, type: exp.category });
+
 export const expenseService = {
-    getAll: () => getStore('ff_expenses'),
-
-    create: (expense) => {
-        const expenses = getStore('ff_expenses');
-        const newExpense = {
-            ...expense,
-            id: `E${String(expenses.length + 1).padStart(3, '0')}`,
-        };
-        expenses.push(newExpense);
-        setStore('ff_expenses', expenses);
-        return newExpense;
+    getAll: async () => { const { data } = await apiClient.get('/expenses'); return data.data.map(mapExpenseResp); },
+    create: async (expense) => { const { data } = await apiClient.post('/expenses', mapExpenseParams(expense)); return mapExpenseResp(data.data); },
+    getByVehicle: async (vehicleId) => {
+        const { data } = await apiClient.get('/expenses');
+        return data.data.map(mapExpenseResp).filter(e => e.vehicleId === vehicleId);
     },
-
-    getByVehicle: (vehicleId) => getStore('ff_expenses').filter(e => e.vehicleId === vehicleId),
-
-    getTotalCostByVehicle: (vehicleId) => {
-        const expenses = getStore('ff_expenses').filter(e => e.vehicleId === vehicleId);
-        const maintenance = getStore('ff_maintenance').filter(m => m.vehicleId === vehicleId);
-        const fuelCost = expenses.reduce((sum, e) => sum + e.cost, 0);
-        const maintCost = maintenance.reduce((sum, m) => sum + m.cost, 0);
-        return { fuelCost, maintCost, total: fuelCost + maintCost };
+    getTotalCostByVehicle: async (vehicleId) => {
+        try {
+            const { data } = await apiClient.get(`/expenses/vehicle/${vehicleId}/total`);
+            return data.data;
+        } catch (e) {
+            return { fuelCost: 0, maintCost: 0, total: 0 };
+        }
     },
 };
 
-// ===== REGISTERED USERS =====
+// ===== ANALYTICS & DASHBOARD =====
+export const analyticsService = {
+    getKPIs: async () => { const { data } = await apiClient.get('/dashboard/kpis'); return data.data; },
+    getFleetStatus: async () => { const { data } = await apiClient.get('/dashboard/fleet-status'); return data.data; },
+    getSafetyScores: async () => { const { data } = await apiClient.get('/dashboard/safety-scores'); return data.data; },
+    getCostBreakdown: async () => { const { data } = await apiClient.get('/dashboard/cost-breakdown'); return data.data; },
+    getROI: async () => { const { data } = await apiClient.get('/analytics/roi'); return data.data; },
+    getMapData: async () => { const { data } = await apiClient.get('/fleet-map/data'); return data.data; }
+};
+
+// ===== USERS =====
 export const userService = {
-    getAll: () => getStore('ff_users'),
-
-    findByEmail: (email) =>
-        getStore('ff_users').find(u => u.email.toLowerCase() === email.toLowerCase()),
-
-    create: (user) => {
-        const users = getStore('ff_users');
-        if (users.some(u => u.email.toLowerCase() === user.email.toLowerCase())) {
-            return { error: 'A user with this email already exists' };
+    getAll: async () => { const { data } = await apiClient.get('/users'); return data.data; },
+    create: async (user) => {
+        try {
+            const { data } = await apiClient.post('/users', user);
+            return data.data;
+        } catch (e) {
+            return { error: e.response?.data?.message || 'Error creating user' };
         }
-        const newUser = {
-            id: `U${String(users.length + 1).padStart(3, '0')}`,
-            name: user.name || user.email.split('@')[0],
-            email: user.email,
-            password: user.password,
-            role: user.role,
-            createdAt: new Date().toISOString().split('T')[0],
-        };
-        users.push(newUser);
-        setStore('ff_users', users);
-        return newUser;
     },
-
-    delete: (id) => {
-        const users = getStore('ff_users').filter(u => u.id !== id);
-        setStore('ff_users', users);
-    },
+    delete: async (id) => { await apiClient.delete(`/users/${id}`); } // Ensure backend has this!
 };
 
 // ===== AUTH =====
 export const authService = {
-    login: (email, password) => {
-        const user = userService.findByEmail(email);
-        if (!user || user.password !== password) return null;
-        const sessionUser = { email: user.email, role: user.role, name: user.name };
-        localStorage.setItem('ff_user', JSON.stringify(sessionUser));
-        return sessionUser;
+    login: async (email, password) => {
+        try {
+            const { data } = await apiClient.post('/auth/login', { email, password });
+            const token = data.data.token;
+            localStorage.setItem('ff_token', token);
+            // getting user details since /auth/login returns token+user in backend, but just in case:
+            if (data.data.user) {
+                localStorage.setItem('ff_user', JSON.stringify(data.data.user));
+                return data.data.user;
+            }
+
+            const userResp = await apiClient.get('/auth/me');
+            const user = userResp.data.data;
+            localStorage.setItem('ff_user', JSON.stringify(user));
+            return user;
+        } catch (error) {
+            return null;
+        }
     },
     logout: () => {
+        localStorage.removeItem('ff_token');
         localStorage.removeItem('ff_user');
     },
     getUser: () => {

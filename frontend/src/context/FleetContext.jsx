@@ -1,5 +1,4 @@
 import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import { initializeData } from '../data/seedData';
 import { vehicleService, driverService, tripService, maintenanceService, expenseService, authService } from '../api/services';
 import toast from 'react-hot-toast';
 
@@ -19,11 +18,11 @@ function reducer(state, action) {
         case 'REFRESH_ALL':
             return {
                 ...state,
-                vehicles: vehicleService.getAll(),
-                drivers: driverService.getAll(),
-                trips: tripService.getAll(),
-                maintenance: maintenanceService.getAll(),
-                expenses: expenseService.getAll(),
+                vehicles: action.payload.vehicles || [],
+                drivers: action.payload.drivers || [],
+                trips: action.payload.trips || [],
+                maintenance: action.payload.maintenance || [],
+                expenses: action.payload.expenses || [],
             };
         case 'SET_USER':
             return { ...state, user: action.payload };
@@ -35,16 +34,36 @@ function reducer(state, action) {
 export function FleetProvider({ children }) {
     const [state, dispatch] = useReducer(reducer, initialState);
 
-    useEffect(() => {
-        initializeData();
-        dispatch({ type: 'REFRESH_ALL' });
-        const user = authService.getUser();
-        if (user) dispatch({ type: 'SET_USER', payload: user });
+    const refresh = useCallback(async () => {
+        // Skip fetching if no valid token
+        if (!localStorage.getItem('ff_token')) return;
+
+        try {
+            const [vehicles, drivers, trips, maintenance, expenses] = await Promise.all([
+                vehicleService.getAll(),
+                driverService.getAll(),
+                tripService.getAll(),
+                maintenanceService.getAll(),
+                expenseService.getAll()
+            ]);
+            dispatch({ type: 'REFRESH_ALL', payload: { vehicles, drivers, trips, maintenance, expenses } });
+        } catch (error) {
+            console.error("Failed to fetch fleet data", error);
+            // Optionally clear token on 401
+            if (error.response?.status === 401) {
+                authService.logout();
+                dispatch({ type: 'SET_USER', payload: null });
+            }
+        }
     }, []);
 
-    const refresh = useCallback(() => {
-        dispatch({ type: 'REFRESH_ALL' });
-    }, []);
+    useEffect(() => {
+        const user = authService.getUser();
+        if (user) {
+            dispatch({ type: 'SET_USER', payload: user });
+            refresh();
+        }
+    }, [refresh]);
 
     const showToast = useCallback((message, type = 'success') => {
         if (type === 'error') toast.error(message);
@@ -52,13 +71,14 @@ export function FleetProvider({ children }) {
         else toast.success(message);
     }, []);
 
-    const login = useCallback((email, password) => {
-        const user = authService.login(email, password);
+    const login = useCallback(async (email, password) => {
+        const user = await authService.login(email, password);
         if (user) {
             dispatch({ type: 'SET_USER', payload: user });
+            await refresh();
         }
         return user;
-    }, []);
+    }, [refresh]);
 
     const logout = useCallback(() => {
         authService.logout();
