@@ -16,9 +16,9 @@ const mapVehicleResp = (veh) => ({
 });
 
 export const vehicleService = {
-    getAll: async () => { const { data } = await apiClient.get('/vehicles'); return data.data.map(mapVehicleResp); },
+    getAll: async () => { try { const { data } = await apiClient.get('/vehicles'); return data.data.map(mapVehicleResp); } catch (e) { return []; } },
     getById: async (id) => { const { data } = await apiClient.get(`/vehicles/${id}`); return mapVehicleResp(data.data); },
-    getAvailable: async () => { const { data } = await apiClient.get('/vehicles/available'); return data.data.map(mapVehicleResp); },
+    getAvailable: async () => { try { const { data } = await apiClient.get('/vehicles/available'); return data.data.map(mapVehicleResp); } catch (e) { return []; } },
     create: async (vehicle) => { const { data } = await apiClient.post('/vehicles', mapVehicleParams(vehicle)); return mapVehicleResp(data.data); },
     update: async (id, updates) => { const { data } = await apiClient.put(`/vehicles/${id}`, mapVehicleParams(updates)); return mapVehicleResp(data.data); },
     updateStatus: async (id, status) => { const { data } = await apiClient.patch(`/vehicles/${id}/status`, { status: status.toUpperCase().replace(' ', '_') }); return mapVehicleResp(data.data); },
@@ -46,9 +46,9 @@ const mapDriverResp = (drv) => ({
 });
 
 export const driverService = {
-    getAll: async () => { const { data } = await apiClient.get('/drivers'); return data.data.map(mapDriverResp); },
+    getAll: async () => { try { const { data } = await apiClient.get('/drivers'); return data.data.map(mapDriverResp); } catch (e) { return []; } },
     getById: async (id) => { const { data } = await apiClient.get(`/drivers/${id}`); return mapDriverResp(data.data); },
-    getAvailable: async () => { const { data } = await apiClient.get('/drivers/available'); return data.data.map(mapDriverResp); },
+    getAvailable: async () => { try { const { data } = await apiClient.get('/drivers/available'); return data.data.map(mapDriverResp); } catch (e) { return []; } },
     create: async (driver) => { const { data } = await apiClient.post('/drivers', mapDriverParams(driver)); return mapDriverResp(data.data); },
     update: async (id, updates) => { const { data } = await apiClient.put(`/drivers/${id}`, mapDriverParams(updates)); return mapDriverResp(data.data); },
     updateStatus: async (id, status) => { const { data } = await apiClient.patch(`/drivers/${id}/status`, { status: status.toUpperCase().replace(' ', '_') }); return mapDriverResp(data.data); },
@@ -80,9 +80,9 @@ const mapTripResp = (trp) => ({
 });
 
 export const tripService = {
-    getAll: async () => { const { data } = await apiClient.get('/trips'); return data.data.map(mapTripResp); },
+    getAll: async () => { try { const { data } = await apiClient.get('/trips'); return data.data.map(mapTripResp); } catch (e) { return []; } },
     getById: async (id) => { const { data } = await apiClient.get(`/trips/${id}`); return mapTripResp(data.data); },
-    getPending: async () => { const { data } = await apiClient.get('/trips/pending'); return data.data.map(mapTripResp); },
+    getPending: async () => { try { const { data } = await apiClient.get('/trips/pending'); return data.data.map(mapTripResp); } catch (e) { return []; } },
     create: async (trip) => { const { data } = await apiClient.post('/trips', mapTripParams(trip)); return mapTripResp(data.data); },
     dispatch: async (id) => { const { data } = await apiClient.patch(`/trips/${id}/dispatch`); return mapTripResp(data.data); },
     complete: async (id, endOdometer) => { const { data } = await apiClient.patch(`/trips/${id}/complete`, { endOdometerKm: Number(endOdometer) }); return mapTripResp(data.data); },
@@ -107,8 +107,8 @@ const mapMaintenanceResp = (maint) => ({
 });
 
 export const maintenanceService = {
-    getAll: async () => { const { data } = await apiClient.get('/maintenance'); return data.data.map(mapMaintenanceResp); },
-    getByVehicle: async (vehicleId) => { const { data } = await apiClient.get(`/maintenance/vehicle/${vehicleId}`); return data.data.map(mapMaintenanceResp); },
+    getAll: async () => { try { const { data } = await apiClient.get('/maintenance'); return data.data.map(mapMaintenanceResp); } catch (e) { return []; } },
+    getByVehicle: async (vehicleId) => { try { const { data } = await apiClient.get(`/maintenance/vehicle/${vehicleId}`); return data.data.map(mapMaintenanceResp); } catch (e) { return []; } },
     create: async (log) => { const { data } = await apiClient.post('/maintenance', mapMaintenanceParams(log)); return mapMaintenanceResp(data.data); },
     complete: async (id) => { const { data } = await apiClient.patch(`/maintenance/${id}/complete`); return mapMaintenanceResp(data.data); },
 };
@@ -126,7 +126,7 @@ const mapExpenseParams = (exp) => {
 const mapExpenseResp = (exp) => ({ ...exp, type: exp.category });
 
 export const expenseService = {
-    getAll: async () => { const { data } = await apiClient.get('/expenses'); return data.data.map(mapExpenseResp); },
+    getAll: async () => { try { const { data } = await apiClient.get('/expenses'); return data.data.map(mapExpenseResp); } catch (e) { return []; } },
     create: async (expense) => { const { data } = await apiClient.post('/expenses', mapExpenseParams(expense)); return mapExpenseResp(data.data); },
     getByVehicle: async (vehicleId) => {
         const { data } = await apiClient.get('/expenses');

@@ -39,13 +39,16 @@ export function FleetProvider({ children }) {
         if (!localStorage.getItem('ff_token')) return;
 
         try {
-            const [vehicles, drivers, trips, maintenance, expenses] = await Promise.all([
+            const results = await Promise.allSettled([
                 vehicleService.getAll(),
                 driverService.getAll(),
                 tripService.getAll(),
                 maintenanceService.getAll(),
                 expenseService.getAll()
             ]);
+
+            const [vehicles, drivers, trips, maintenance, expenses] = results.map(r => r.status === 'fulfilled' ? r.value : []);
+
             dispatch({ type: 'REFRESH_ALL', payload: { vehicles, drivers, trips, maintenance, expenses } });
         } catch (error) {
             console.error("Failed to fetch fleet data", error);

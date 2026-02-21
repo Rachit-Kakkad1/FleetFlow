@@ -2,7 +2,46 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useFleet } from '../context/FleetContext';
 import { motion } from 'framer-motion';
-import { Zap, ArrowRight, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Zap, ArrowRight, Eye, EyeOff, ArrowLeft, Shield, Radio, TrendingUp } from 'lucide-react';
+
+const QUICK_LOGINS = [
+  {
+    label: 'Manager',
+    icon: Zap,
+    email: 'manager@fleet.com',
+    password: 'manager123',
+    color: '#a855f7',
+    bg: 'rgba(168,85,247,0.1)',
+    border: 'rgba(168,85,247,0.25)',
+  },
+  {
+    label: 'Dispatcher',
+    icon: Radio,
+    email: 'dispatcher@fleet.com',
+    password: 'dispatch123',
+    color: '#3b82f6',
+    bg: 'rgba(59,130,246,0.1)',
+    border: 'rgba(59,130,246,0.25)',
+  },
+  {
+    label: 'Safety Officer',
+    icon: Shield,
+    email: 'safety@fleet.com',
+    password: 'safety123',
+    color: '#f59e0b',
+    bg: 'rgba(245,158,11,0.1)',
+    border: 'rgba(245,158,11,0.25)',
+  },
+  {
+    label: 'Financial Analyst',
+    icon: TrendingUp,
+    email: 'analyst@fleet.com',
+    password: 'analyst123',
+    color: '#10b981',
+    bg: 'rgba(16,185,129,0.1)',
+    border: 'rgba(16,185,129,0.25)',
+  },
+];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,20 +49,28 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!form.email || !form.password) {
       setError('Please fill in all fields');
       return;
     }
-    const user = login(form.email, form.password);
-    if (!user) {
-      setError('Invalid email or password');
-      return;
+    setLoading(true);
+    try {
+      const user = await login(form.email, form.password);
+      if (!user) {
+        setError('Invalid email or password');
+        setLoading(false);
+        return;
+      }
+      navigate('/dashboard');
+    } catch {
+      setError('Login failed. Please try again.');
+      setLoading(false);
     }
-    navigate('/dashboard');
   };
 
   return (
@@ -70,7 +117,7 @@ export default function Login() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
         style={{
-          width: '100%', maxWidth: 400,
+          width: '100%', maxWidth: 420,
           background: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
           borderRadius: 16, padding: 32,
@@ -91,8 +138,58 @@ export default function Login() {
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.03em' }}>FleetFlow</h1>
           </Link>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            Fleet & Logistics Management
+            Fleet &amp; Logistics Management
           </p>
+        </div>
+
+        {/* ── Quick Login Cards ── */}
+        <div style={{ marginBottom: 20 }}>
+          <p style={{
+            fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 10, textAlign: 'center',
+          }}>
+            Quick Login
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {QUICK_LOGINS.map(({ label, icon: Icon, email, password, color, bg, border }) => (
+              <motion.button
+                key={label}
+                type="button"
+                whileHover={{ scale: 1.04, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => { setForm({ email, password }); setError(''); }}
+                style={{
+                  flex: 1,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  padding: '14px 8px', borderRadius: 12,
+                  background: bg,
+                  border: `1px solid ${border}`,
+                  cursor: 'pointer',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: `${color}22`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon size={16} color={color} />
+                </div>
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color, lineHeight: 1.2, textAlign: 'center' }}>
+                  {label}
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Divider ── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
+        }}>
+          <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>OR</span>
+          <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -136,20 +233,22 @@ export default function Login() {
           <button
             type="submit"
             className="btn btn-primary"
+            disabled={loading}
             style={{
               width: '100%', justifyContent: 'center',
               padding: '10px 20px', fontSize: '0.875rem',
               marginTop: 4,
+              opacity: loading ? 0.7 : 1,
             }}
           >
-            Sign In <ArrowRight size={16} />
+            {loading ? 'Signing In...' : <>Sign In <ArrowRight size={16} /></>}
           </button>
 
           <p style={{
             fontSize: '0.7rem', color: 'var(--text-muted)',
             textAlign: 'center', marginTop: 4,
           }}>
-            Default: manager@fleetflow.com / manager123
+            Select a role above or enter your credentials to continue.
           </p>
         </form>
       </motion.div>
